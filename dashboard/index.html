@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EV Charger – IoT Dashboard</title>
+  <meta name="description" content="Real-time IoT monitoring dashboard for ESP32-based EV Charger with live voltage, current, power and relay status." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── BACKGROUND PARTICLES ── -->
+  <div class="bg-grid"></div>
+  <div class="particles" id="particles"></div>
+
+  <!-- ── HEADER ── -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-icon">⚡</div>
+      <div class="header-titles">
+        <h1 class="brand">EV CHARGER</h1>
+        <span class="sub-brand">IoT MONITORING DASHBOARD</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="conn-badge" id="connBadge">
+        <span class="conn-dot" id="connDot"></span>
+        <span id="connLabel">Connecting…</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="hdr-clock" id="clock">--:--:--</div>
+      <div class="hdr-date" id="dateLabel"></div>
+    </div>
+  </header>
+
+  <!-- ── MAIN ── -->
+  <main class="dashboard">
+
+    <!-- ── ROW 1 – KPI CARDS ── -->
+    <section class="kpi-row">
+
+      <div class="kpi-card" id="card-vin">
+        <div class="kpi-icon">🔌</div>
+        <div class="kpi-body">
+          <div class="kpi-label">Input Voltage</div>
+          <div class="kpi-value"><span id="kpi-vin">—</span><span class="kpi-unit">V</span></div>
+          <div class="kpi-bar-wrap"><div class="kpi-bar" id="bar-vin"></div></div>
+          <div class="kpi-range">0 – 25 V</div>
+        </div>
+        <div class="kpi-glow glow-blue"></div>
+      </div>
+
+      <div class="kpi-card" id="card-vbat">
+        <div class="kpi-icon">🔋</div>
+        <div class="kpi-body">
+          <div class="kpi-label">Battery Voltage</div>
+          <div class="kpi-value"><span id="kpi-vbat">—</span><span class="kpi-unit">V</span></div>
+          <div class="kpi-bar-wrap"><div class="kpi-bar" id="bar-vbat"></div></div>
+          <div class="kpi-range">0 – 25 V</div>
+        </div>
+        <div class="kpi-glow glow-green"></div>
+      </div>
+
+      <div class="kpi-card" id="card-current">
+        <div class="kpi-icon">⚡</div>
+        <div class="kpi-body">
+          <div class="kpi-label">Current</div>
+          <div class="kpi-value"><span id="kpi-current">—</span><span class="kpi-unit">A</span></div>
+          <div class="kpi-bar-wrap"><div class="kpi-bar" id="bar-current"></div></div>
+          <div class="kpi-range">0 – 2 A  |  Limit: 0.9 A</div>
+        </div>
+        <div class="kpi-glow glow-yellow"></div>
+      </div>
+
+      <div class="kpi-card" id="card-power">
+        <div class="kpi-icon">💡</div>
+        <div class="kpi-body">
+          <div class="kpi-label">Power</div>
+          <div class="kpi-value"><span id="kpi-power">—</span><span class="kpi-unit">W</span></div>
+          <div class="kpi-bar-wrap"><div class="kpi-bar" id="bar-power"></div></div>
+          <div class="kpi-range">0 – 50 W</div>
+        </div>
+        <div class="kpi-glow glow-purple"></div>
+      </div>
+
+    </section>
+
+    <!-- ── ROW 2 – CHARTS + STATUS ── -->
+    <section class="main-row">
+
+      <!-- Live Chart -->
+      <div class="panel chart-panel">
+        <div class="panel-header">
+          <span class="panel-title">📈 LIVE READINGS</span>
+          <div class="chart-legend">
+            <span class="leg leg-vin">Vin</span>
+            <span class="leg leg-vbat">Vbat</span>
+            <span class="leg leg-current">Current ×10</span>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <canvas id="liveChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Relay + Status Column -->
+      <div class="side-col">
+
+        <!-- Relay Status -->
+        <div class="panel relay-panel" id="relayPanel">
+          <div class="panel-title">RELAY STATUS</div>
+          <div class="relay-ring" id="relayRing">
+            <div class="relay-inner">
+              <div class="relay-icon" id="relayIcon">⚡</div>
+              <div class="relay-state" id="relayState">—</div>
+            </div>
+          </div>
+          <div class="relay-desc" id="relayDesc">Waiting for data…</div>
+        </div>
+
+        <!-- Gauge – Battery % -->
+        <div class="panel gauge-panel">
+          <div class="panel-title">BATTERY LEVEL</div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 200 120" class="gauge-svg" id="gaugeSvg">
+              <!-- Background arc -->
+              <path d="M 20 110 A 90 90 0 0 1 180 110" fill="none" stroke="#1e2a3a" stroke-width="16" stroke-linecap="round"/>
+              <!-- Value arc -->
+              <path d="M 20 110 A 90 90 0 0 1 180 110" fill="none" stroke="url(#gaugeGrad)" stroke-width="16" stroke-linecap="round"
+                    stroke-dasharray="283" stroke-dashoffset="283" id="gaugeArc"/>
+              <!-- Needle -->
+              <line x1="100" y1="110" x2="100" y2="30" stroke="#ffffff" stroke-width="2.5"
+                    stroke-linecap="round" id="needle" transform="rotate(-90 100 110)"/>
+              <circle cx="100" cy="110" r="6" fill="#ffffff"/>
+              <defs>
+                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%"   stop-color="#ff4444"/>
+                  <stop offset="50%"  stop-color="#ffe600"/>
+                  <stop offset="100%" stop-color="#00ff88"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="gauge-val" id="gaugeVal">0%</div>
+            <div class="gauge-limit">🔋 5.0 V = 0% &nbsp;|&nbsp; 12.4 V = 100%</div>
+          </div>
+        </div>
+
+
+      </div>
+    </section>
+
+    <!-- ── ROW 3 – LOG TABLE ── -->
+    <section class="panel log-panel">
+      <div class="panel-header">
+        <span class="panel-title">📋 EVENT LOG</span>
+        <button class="btn-clear" id="btnClear" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="log-scroll">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Vin (V)</th>
+              <th>Vbat (V)</th>
+              <th>Current (A)</th>
+              <th>Power (W)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="logBody">
+            <tr><td colspan="6" class="log-empty">Waiting for ESP32 data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
