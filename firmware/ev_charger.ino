@@ -19,17 +19,18 @@
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiUdp.h>
 #include <ArduinoJson.h>
 
 // ─── WiFi Credentials ──────────────────────────────────────────────────────
 const char* WIFI_SSID     = "EngiiGenius";      // <-- Change this
 const char* WIFI_PASSWORD = "Engii@123";  // <-- Change this
 
-// ─── Server Config ─────────────────────────────────────────────────────────
-// Your PC's local IP (run `ipconfig` in cmd to find it)
-const char* SERVER_HOST = "192.168.0.2";   // <-- Change this to your PC's IP
-const int   SERVER_PORT = 3000;
+// ─── Server Config (Dynamic) ───────────────────────────────────────────────
+// No hardcoded IP! ESP32 will find the server automatically via UDP broadcast.
+const int   UDP_PORT = 3001;
 String      serverURL;
+WiFiUDP     udp;
 
 // ─── Hardware Pins ─────────────────────────────────────────────────────────
 #define VIN_PIN     34
@@ -84,6 +85,61 @@ void connectWiFi() {
   }
 }
 
+// ─── Server Auto-Discovery (UDP) ───────────────────────────────────────────
+void discoverServer() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Locating Server.");
+  Serial.println("Broadcasting UDP to find EV Server...");
+  
+  udp.begin(UDP_PORT);
+  bool discovered = false;
+
+  while (!discovered) {
+    // 1. Broadcast "EV_DISCOVER"
+    udp.beginPacket(IPAddress(255, 255, 255, 255), UDP_PORT);
+    udp.print("EV_DISCOVER");
+    udp.endPacket();
+
+    // 2. Wait up to 2 seconds for a reply
+    unsigned long waitStart = millis();
+    while (millis() - waitStart < 2000) {
+      int packetSize = udp.parsePacket();
+      if (packetSize) {
+        char packetBuffer[255];
+        int len = udp.read(packetBuffer, 255);
+        if (len > 0) packetBuffer[len] = 0;
+        
+        String reply = String(packetBuffer);
+        if (reply.startsWith("EV_SERVER:")) {
+          String ipStr = udp.remoteIP().toString();
+          String portStr = reply.substring(10); // Extract port number after "EV_SERVER:"
+          
+          serverURL = "http://" + ipStr + ":" + portStr + "/api/data";
+          
+          Serial.println("Server found at: " + serverURL);
+          discovered = true;
+          
+          lcd.setCursor(0, 1);
+          lcd.print("Found! " + portStr + "  ");
+          delay(2000);
+          break;
+        }
+      }
+      delay(10);
+    }
+    
+    if (!discovered) {
+      Serial.println("No reply, retrying broadcast...");
+      lcd.setCursor(0, 1);
+      lcd.print("Retrying...     ");
+    }
+  }
+  udp.stop();
+}
+
 // ─── Send Data to Server ───────────────────────────────────────────────────
 // relay state: "ON" = charging, "TRIP" = overcurrent, "FULL" = battery full
 void sendData(const String& relayState) {
@@ -121,8 +177,6 @@ void sendData(const String& relayState) {
 void setup() {
   Serial.begin(115200);
 
-  serverURL = "http://" + String(SERVER_HOST) + ":" + SERVER_PORT + "/api/data";
-
   // Relay
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW); // Active LOW → relay ON
@@ -149,6 +203,9 @@ void setup() {
 
   // WiFi
   connectWiFi();
+
+  // Find Node.js Server dynamically
+  discoverServer();
 
   lcd.clear();
 }

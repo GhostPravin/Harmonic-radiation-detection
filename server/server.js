@@ -11,13 +11,35 @@ const express = require('express');
 const cors    = require('cors');
 const http    = require('http');
 const WebSocket = require('ws');
+const dgram   = require('dgram');
 const path    = require('path');
 
 const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const UDP_PORT = 3001; // Port used for auto-discovery broadcasts
+
+// ─── UDP Auto-Discovery Server ───────────────────────────────────────────
+const udpServer = dgram.createSocket('udp4');
+
+udpServer.on('message', (msg, rinfo) => {
+  const message = msg.toString().trim();
+  if (message === 'EV_DISCOVER') {
+    console.log(`[UDP] Discovery request from ESP32 at ${rinfo.address}:${rinfo.port}`);
+    // Reply back with our HTTP port
+    const reply = Buffer.from(`EV_SERVER:${PORT}`);
+    udpServer.send(reply, rinfo.port, rinfo.address);
+  }
+});
+
+udpServer.on('listening', () => {
+  const address = udpServer.address();
+  console.log(`[UDP] Auto-Discovery listening on port ${address.port}`);
+});
+
+udpServer.bind(UDP_PORT);
 
 // ─── In-memory data store ────────────────────────────────────────────────
 const MAX_HISTORY = 100;

@@ -8,7 +8,8 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────
-const WS_URL      = `ws://${location.hostname}:3000`;
+const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL      = `${WS_PROTOCOL}//${location.host}`;
 const MAX_POINTS  = 60;   // max data points on chart
 const MAX_LOG     = 50;   // max rows in event log
 const CURRENT_MAX_RANGE = 2.0;
